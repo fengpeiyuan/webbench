@@ -23,6 +23,7 @@
 #include <strings.h>
 #include <time.h>
 #include <signal.h>
+#include <stdlib.h>
 
 /* values */
 volatile int timerexpired=0;
@@ -49,6 +50,12 @@ int mypipe[2];
 char host[MAXHOSTNAMELEN];
 #define REQUEST_SIZE 2048
 char request[REQUEST_SIZE];
+/*ext:inject*/
+char inject[100];
+int inject_from=0;
+int inject_to=0;
+const char delimeters[]="~";
+char *tobe_repl="$";
 
 static const struct option long_options[]=
 {
@@ -66,13 +73,16 @@ static const struct option long_options[]=
  {"version",no_argument,NULL,'V'},
  {"proxy",required_argument,NULL,'p'},
  {"clients",required_argument,NULL,'c'},
+ {"inject",required_argument,NULL,'i'},
  {NULL,0,NULL,0}
 };
 
 /* prototypes */
-static void benchcore(const char* host,const int port, const char *request);
+static void benchcore(const char* host,const int port,char *request);
 static int bench(void);
 static void build_request(const char *url);
+static int get_random(int low,int high);
+static char *malloc_replace(char *data, char *rep, char *to, int free_data);
 
 static void alarm_handler(int signal)
 {
@@ -97,6 +107,7 @@ static void usage(void)
 	"  --trace                  Use TRACE request method.\n"
 	"  -?|-h|--help             This information.\n"
 	"  -V|--version             Display program version.\n"
+	"  -i|--inject              Inject dynamic parameter replace character '$' in url. The pattens like '10~100', 10(means 0~10) are supported.\n"
 	);
 };
 int main(int argc, char *argv[])
@@ -111,7 +122,7 @@ int main(int argc, char *argv[])
           return 2;
  } 
 
- while((opt=getopt_long(argc,argv,"912Vfrt:p:c:?h",long_options,&options_index))!=EOF )
+ while((opt=getopt_long(argc,argv,"912Vfrt:p:c:?hi:",long_options,&options_index))!=EOF )
  {
   switch(opt)
   {
@@ -147,6 +158,16 @@ int main(int argc, char *argv[])
    case 'h':
    case '?': usage();return 2;break;
    case 'c': clients=atoi(optarg);break;
+   case 'i': strcpy(inject,optarg);
+   	   	   char *inject_str=strdup(inject);
+   	   	   char *from,*to;
+   	   	   from=strsep(&inject_str,delimeters);
+   	   	   if(from!=NULL)
+   	   		   inject_from=atoi(from);
+   	   	   to=strsep(&inject_str,delimeters);
+   	   	   if(to!=NULL)
+   	   		   inject_to=atoi(to);
+   	   	   break;
   }
  }
  
@@ -163,6 +184,13 @@ int main(int argc, char *argv[])
 	 "Copyright (c) Radim Kolar 1997-2004, GPL Open Source Software.\n"
 	 );
  build_request(argv[optind]);
+ /*ext: Inject Dynimic Parameters*/
+ printf("Inject Parameter Range:%s. From:%d,to:%d\n",inject,inject_from,inject_to);
+ if(inject_to<=inject_from)
+ {
+	 fprintf(stderr,"Error! Input inject parameters(use -i) range error,pattens should be like 1~100 or 100(means 0~100). Modify patameters patten now\n");
+	 return 2;
+ }
  /* print bench info */
  printf("\nBenchmarking: ");
  switch(method)
@@ -287,7 +315,7 @@ void build_request(const char *url)
 	  strcat(request,"Connection: close\r\n");
   /* add empty line at end */
   if(http10>0) strcat(request,"\r\n"); 
-  // printf("Req=%s\n",request);
+  //printf("Req=%s\n",request);
 }
 
 /* vraci system rc error kod */
@@ -395,7 +423,7 @@ static int bench(void)
   return i;
 }
 
-void benchcore(const char *host,const int port,const char *req)
+void benchcore(const char *host,const int port,char *req)
 {
  int rlen;
  char buf[1500];
@@ -409,9 +437,16 @@ void benchcore(const char *host,const int port,const char *req)
     exit(3);
  alarm(benchtime);
 
- rlen=strlen(req);
+
  nexttry:while(1)
  {
+	/*ext:inject here*/
+	int ran = get_random(inject_from,inject_to);
+	char repl[255];
+	sprintf(repl,"%d",ran);
+	char *req_repl=malloc_replace(req,tobe_repl,repl,0);
+
+	rlen=strlen(req_repl);
     if(timerexpired)
     {
        if(failed>0)
@@ -423,7 +458,7 @@ void benchcore(const char *host,const int port,const char *req)
     }
     s=Socket(host,port);                          
     if(s<0) { failed++;continue;} 
-    if(rlen!=write(s,req,rlen)) {failed++;close(s);continue;}
+    if(rlen!=write(s,req_repl,rlen)) {failed++;close(s);continue;}
     if(http10==0) 
 	    if(shutdown(s,1)) { failed++;close(s);continue;}
     if(force==0) 
@@ -448,5 +483,74 @@ void benchcore(const char *host,const int port,const char *req)
     }
     if(close(s)) {failed++;continue;}
     speed++;
+
+    free(req_repl);
+
  }
+}
+
+/**
+ * @param low
+ * @param high
+ * @return [low,high]
+ */
+static int get_random(int low,int high)
+{
+	return (rand()%(high-low+1))+low;
+}
+
+/**
+ * 统计key在data中出现的次数
+ * @param data 待查找的字符串
+ * @param key  要查找的字符串
+ * @return key在data中出现的次数
+ */
+int _count_string(char *data, char *key)
+{
+    int count = 0;
+    int klen = strlen(key);
+    char *pos_start = data, *pos_end;
+    while (NULL != (pos_end = strstr(pos_start, key))) {
+        pos_start = pos_end + klen;
+        count++;
+    }
+    return count;
+}
+
+
+/**
+ * 将data中的rep字符串替换成to字符串，以动态分配内存方式返回新字符串
+ * 这个函数不需要保证data能保证容量。
+ * @param data 待替换某些字符串的数据
+ * @param rep  待替换的字符串
+ * @param to   替换成的字符串
+ * @param free_data 不为0时要释放data的内存
+ * @return 返回新分配内存的替换完成的字符串，注意释放。
+ */
+static char *malloc_replace(char *data, char *rep, char *to, int free_data)
+{
+    int rep_len = strlen(rep);
+    int to_len  = strlen(to);
+    int counts  = _count_string(data, rep);
+    int m = strlen(data) + counts * (to_len - rep_len);
+    char *new_buf = (char *) malloc(m + 1);
+    if (NULL == new_buf) {
+        free(data);
+        return NULL;
+    }
+    memset(new_buf, 0, m + 1);
+    char *pos_start = data, *pos_end, *pbuf = new_buf;
+    int copy_len;
+    while (NULL != (pos_end = strstr(pos_start, rep))) {
+        copy_len = pos_end - pos_start;
+        strncpy(pbuf, pos_start, copy_len);
+        pbuf += copy_len;
+        strcpy(pbuf, to);
+        pbuf += to_len;
+        pos_start  = pos_end + rep_len;
+    }
+    strcpy(pbuf, pos_start);
+    if (free_data)
+        free(data);
+    return new_buf;
 }
