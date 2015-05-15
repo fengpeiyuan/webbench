@@ -1,14 +1,23 @@
-# Fork of webbench on modify request' Url parameter every time
+# Fork of webbench. Additional options on
 
-Inject dynamic parameter replace character '$' in url. The pattens like '10~100', 10(means 0~10) are supported.
-
+* Modify requests' url parameter randomly in a range, on every request send.
+* Modify different ip address(change http X-Forwarded-For header and only ipv4 support) randomly in a range, on every request send.
+	webserver like nginx can receive so many requests in different ip address, if you use --with-http_realip_module option and config like this:
+```nginx
+set_real_ip_from  192.168.1.0/24;(for example)
+real_ip_header    X-Forwarded-For;
+```
 
 ## Usage
 
-* Use -i option,parameter pattens should be like 1~100 or 100(means 0~100)
+* Use -i(or --injection) option,parameter pattens should be like 1~100 or 100(means 0~100)
   Following commend is sample for this 
 	
 			webbench -c 5 -t 60 -i 1~200 "http://uri:port/action?param=$&callback=cbk"
+* Use -a(or --address) option,parameter pattens should be like 1~254.0~254.0~254.0~254
+  Following commend is sample for this 
+	
+			webbench -c 5 -t 60 -a 1~254.0~254.0~254.0~254 "http://url"
 
 ## License
 
