@@ -3,7 +3,7 @@ CC?=		gcc
 LIBS?=
 LDFLAGS?=
 PREFIX?=	/usr/local
-VERSION=1.5
+VERSION=1.6
 TMPDIR=/tmp/webbench-$(VERSION)
 
 all:   webbench tags

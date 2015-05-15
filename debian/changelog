@@ -1,3 +1,6 @@
+webbench (1.6) unstable; urgency=low
+  * add option i and a
+  
 webbench (1.5) unstable; urgency=low
 
   * allow building with both Gnu and BSD make

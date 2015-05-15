@@ -1,4 +1,4 @@
-# Fork of webbench. Additional options on
+# Fork of webbench, Additional options
 
 * Modify requests' url parameter randomly in a range, on every request send.
 * Modify different ip address(change http X-Forwarded-For header and only ipv4 support) randomly in a range, on every request send.
