@@ -51,11 +51,26 @@ char host[MAXHOSTNAMELEN];
 #define REQUEST_SIZE 2048
 char request[REQUEST_SIZE];
 /*ext:inject*/
+int is_inject=0;
 char inject[100];
 int inject_from=0;
 int inject_to=0;
 const char delimeters[]="~";
 char *tobe_repl="$";
+/*ext:address to be set */
+int is_address_tobe_set=0;
+char address_tobe_set[100];
+int address_part1_from=0;
+int address_part1_to=0;
+int address_part2_from=0;
+int address_part2_to=0;
+int address_part3_from=0;
+int address_part3_to=0;
+int address_part4_from=0;
+int address_part4_to=0;
+const char address_delimeters[]=".";
+const char address_part_delimeters[]="~";
+
 
 static const struct option long_options[]=
 {
@@ -74,6 +89,7 @@ static const struct option long_options[]=
  {"proxy",required_argument,NULL,'p'},
  {"clients",required_argument,NULL,'c'},
  {"inject",required_argument,NULL,'i'},
+ {"address",required_argument,NULL,'a'},
  {NULL,0,NULL,0}
 };
 
@@ -108,6 +124,7 @@ static void usage(void)
 	"  -?|-h|--help             This information.\n"
 	"  -V|--version             Display program version.\n"
 	"  -i|--inject              Inject dynamic parameter replace character '$' in url. The pattens like '10~100', 10(means 0~10) are supported.\n"
+	"  -a|--address             Ip address parameter is set to http header:'X-Forwarded-For',address pattens like: 172~192.0~168.131~141.100~251, now only ipv4 is supported.\n"
 	);
 };
 int main(int argc, char *argv[])
@@ -122,7 +139,7 @@ int main(int argc, char *argv[])
           return 2;
  } 
 
- while((opt=getopt_long(argc,argv,"912Vfrt:p:c:?hi:",long_options,&options_index))!=EOF )
+ while((opt=getopt_long(argc,argv,"912Vfrt:p:c:?hi:a:",long_options,&options_index))!=EOF )
  {
   switch(opt)
   {
@@ -167,6 +184,52 @@ int main(int argc, char *argv[])
    	   	   to=strsep(&inject_str,delimeters);
    	   	   if(to!=NULL)
    	   		   inject_to=atoi(to);
+   	   	   is_inject=1;
+   	   	   break;
+   case 'a': strcpy(address_tobe_set,optarg);
+   	   	   char *address_tobe_set_s = strdup(address_tobe_set);
+   	   	   char *address_part1_s,*address_part2_s,*address_part3_s,*address_part4_s;
+   	   	   address_part1_s = strsep(&address_tobe_set_s,address_delimeters);
+   	   	   /*printf("address_part1_s:%s",address_part1_s);*/
+   	   	   if(address_part1_s!=NULL){
+   	   		   char *from,*to;
+   	   		   from=strsep(&address_part1_s,address_part_delimeters);
+   	   		   if(from!=NULL) address_part1_from=atoi(from);
+   	   		   to=strsep(&address_part1_s,address_part_delimeters);
+   	   		   if(to!=NULL) address_part1_to=atoi(to);
+
+   	   		   address_part2_s = strsep(&address_tobe_set_s,address_delimeters);
+   	   	   }
+
+   	   	   if(address_part2_s!=NULL){
+				char *from,*to;
+				from=strsep(&address_part2_s,address_part_delimeters);
+				if(from!=NULL) address_part2_from=atoi(from);
+				to=strsep(&address_part2_s,address_part_delimeters);
+				if(to!=NULL) address_part2_to=atoi(to);
+
+				address_part3_s = strsep(&address_tobe_set_s,address_delimeters);
+   	   	   }
+
+   	   	   if(address_part3_s!=NULL){
+				char *from,*to;
+				from=strsep(&address_part3_s,address_part_delimeters);
+				if(from!=NULL) address_part3_from=atoi(from);
+				to=strsep(&address_part3_s,address_part_delimeters);
+				if(to!=NULL) address_part3_to=atoi(to);
+
+   	   		   address_part4_s = strsep(&address_tobe_set_s,address_delimeters);
+   	   	   }
+
+   	   	   if(address_part4_s!=NULL){
+				char *from,*to;
+				from=strsep(&address_part4_s,address_part_delimeters);
+				if(from!=NULL) address_part4_from=atoi(from);
+				to=strsep(&address_part4_s,address_part_delimeters);
+				if(to!=NULL) address_part4_to=atoi(to);
+
+   	   	   }
+   	   	   is_address_tobe_set=1;
    	   	   break;
   }
  }
@@ -183,14 +246,36 @@ int main(int argc, char *argv[])
  fprintf(stderr,"Webbench - Simple Web Benchmark "PROGRAM_VERSION"\n"
 	 "Copyright (c) Radim Kolar 1997-2004, GPL Open Source Software.\n"
 	 );
+ /*ext:address tobe set*/
+  if(is_address_tobe_set==1){
+ 	 printf("Ip address tobe set:%s.\n",address_tobe_set);
+ 	 printf("IP address range:%d~%d.%d~%d.%d~%d.%d~%d\n",address_part1_from,address_part1_to,address_part2_from,address_part2_to,address_part3_from,address_part3_to,address_part4_from,address_part4_to);
+ 	 if(address_part1_from<=0||address_part1_from>254||address_part1_to<=0||address_part1_to>254 \
+ 			||address_part2_from<0||address_part2_from>254||address_part2_to<0||address_part2_to>254 \
+ 			||address_part3_from<0||address_part3_from>254||address_part3_to<0||address_part3_to>254 \
+ 			||address_part4_from<0||address_part4_from>254||address_part4_to<0||address_part4_to>254){
+ 		fprintf(stderr,"Error! Input ip address range error. Range should be 0~255 . Modify patameters range now\n");
+ 		return 2;
+
+ 	 }
+ 	 if(address_part1_from>address_part1_to||address_part2_from>address_part2_to||address_part3_from>address_part3_to||address_part4_from>address_part4_to)
+ 	 {
+ 		 fprintf(stderr,"Error! Input ip address range error. Range should be from small to big and must be number. Modify patameters patten now\n");
+ 		 return 2;
+ 	 }
+  }
+ /*build request*/
  build_request(argv[optind]);
  /*ext: Inject Dynimic Parameters*/
- printf("Inject Parameter Range:%s. From:%d,to:%d\n",inject,inject_from,inject_to);
- if(inject_to<=inject_from)
- {
-	 fprintf(stderr,"Error! Input inject parameters(use -i) range error,pattens should be like 1~100 or 100(means 0~100). Modify patameters patten now\n");
-	 return 2;
+ if(is_inject==1){
+	 printf("Inject Parameter Range:%s. From:%d,to:%d\n",inject,inject_from,inject_to);
+	 if(inject_to<inject_from)
+	 {
+		 fprintf(stderr,"Error! Input inject parameters(use -i) range error,pattens should be like 1~100 or 100(means 0~100). Modify patameters patten now\n");
+		 return 2;
+	 }
  }
+
  /* print bench info */
  printf("\nBenchmarking: ");
  switch(method)
@@ -313,9 +398,14 @@ void build_request(const char *url)
   }
   if(http10>1)
 	  strcat(request,"Connection: close\r\n");
+  /*ext: add X-Forwarded-For header if address tobe set*/
+  /*ext:address tobe set*/
+   if(is_address_tobe_set==1){
+	   strcat(request,"X-Forwarded-For: address_tobe_set\r\n");
+   }
   /* add empty line at end */
   if(http10>0) strcat(request,"\r\n"); 
-  //printf("Req=%s\n",request);
+  /*printf("Req=%s\n",request);*/
 }
 
 /* vraci system rc error kod */
@@ -440,11 +530,27 @@ void benchcore(const char *host,const int port,char *req)
 
  nexttry:while(1)
  {
+	 char *req_repl=req;
 	/*ext:inject here*/
-	int ran = get_random(inject_from,inject_to);
-	char repl[255];
-	sprintf(repl,"%d",ran);
-	char *req_repl=malloc_replace(req,tobe_repl,repl,0);
+	 if(is_inject==1){
+		int ran = get_random(inject_from,inject_to);
+		char repl[255];
+		sprintf(repl,"%d",ran);
+		req_repl=malloc_replace(req_repl,tobe_repl,repl,0);
+
+	 }
+
+	/*ext:address tobe set */
+	if(is_address_tobe_set==1){
+		   int address_part1_random = get_random(address_part1_from,address_part1_to);
+		   int address_part2_random = get_random(address_part2_from,address_part2_to);
+		   int address_part3_random = get_random(address_part3_from,address_part3_to);
+		   int address_part4_random = get_random(address_part4_from,address_part4_to);
+		   char address_random[255];
+		   sprintf(address_random,"X-Forwarded-For: %d.%d.%d.%d\r\n",address_part1_random,address_part2_random,address_part3_random,address_part4_random);
+		   req_repl=malloc_replace(req_repl,"address_tobe_set",address_random,0);
+	   }
+
 
 	rlen=strlen(req_repl);
     if(timerexpired)
