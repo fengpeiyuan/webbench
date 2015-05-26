@@ -19,9 +19,9 @@ real_ip_header    X-Forwarded-For;
   Following commend is sample for this 
 	
 			webbench -c 5 -t 60 -a 1~254.0~254.0~254.0~254 "http://url"
-* Use -l(or --limitrate) option, parameters like below means 3000 requests total, 600 requests/process, 10 requests/process/second
+* Use -l(or --limitrate) option
 			webbench -c 5 -t 60 -l 10 "http://url"
-
+	parameters like below means 3000 requests total, 600 requests/process, 10 requests/process/second
 
 ## License
 
