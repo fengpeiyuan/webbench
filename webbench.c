@@ -70,7 +70,9 @@ int address_part4_from=0;
 int address_part4_to=0;
 const char address_delimeters[]=".";
 const char address_part_delimeters[]="~";
-
+/*rate limit, unit:number/client/s */
+int is_limitrate=0;
+int limitrate;
 
 static const struct option long_options[]=
 {
@@ -90,6 +92,7 @@ static const struct option long_options[]=
  {"clients",required_argument,NULL,'c'},
  {"inject",required_argument,NULL,'i'},
  {"address",required_argument,NULL,'a'},
+ {"limitrate",required_argument,NULL,'l'},
  {NULL,0,NULL,0}
 };
 
@@ -125,6 +128,7 @@ static void usage(void)
 	"  -V|--version             Display program version.\n"
 	"  -i|--inject              Inject dynamic parameter replace character '$' in url. The pattens like '10~100', 10(means 0~10) are supported.\n"
 	"  -a|--address             Ip address parameter is set to http header:'X-Forwarded-For',address pattens like: 172~192.0~168.131~141.100~251, now only ipv4 is supported.\n"
+    "  -l|--limitrate           Limit requests` rate by number per client per second, number/c/s.\n"
 	);
 };
 int main(int argc, char *argv[])
@@ -139,7 +143,7 @@ int main(int argc, char *argv[])
           return 2;
  } 
 
- while((opt=getopt_long(argc,argv,"912Vfrt:p:c:?hi:a:",long_options,&options_index))!=EOF )
+ while((opt=getopt_long(argc,argv,"912Vfrt:p:c:?hi:a:l:",long_options,&options_index))!=EOF )
  {
   switch(opt)
   {
@@ -231,6 +235,12 @@ int main(int argc, char *argv[])
    	   	   }
    	   	   is_address_tobe_set=1;
    	   	   break;
+   case 'l':
+	   	   is_limitrate=1;
+	   	   limitrate=atoi(optarg);
+   	   	   limitrate = limitrate * benchtime;
+   	   	   break;
+
   }
  }
  
@@ -264,6 +274,12 @@ int main(int argc, char *argv[])
  		 return 2;
  	 }
   }
+
+ /*ext: limitrate*/
+  if(is_limitrate==1&&limitrate==0){
+	  fprintf(stderr,"Error! Input limitrate/-l error. Range must be number and more then zero. Modify patameters now\n");
+  }
+
  /*build request*/
  build_request(argv[optind]);
  /*ext: Inject Dynimic Parameters*/
@@ -520,6 +536,9 @@ void benchcore(const char *host,const int port,char *req)
  int s,i;
  struct sigaction sa;
 
+ /*ext:limitrate*/
+ int limitrate_process=0;
+
  /* setup alarm signal handler */
  sa.sa_handler=alarm_handler;
  sa.sa_flags=0;
@@ -527,9 +546,15 @@ void benchcore(const char *host,const int port,char *req)
     exit(3);
  alarm(benchtime);
 
-
  nexttry:while(1)
  {
+	 /*ext:limitrate*/
+	 if(is_limitrate==1){
+		 limitrate_process++;//not care success or fail
+		 if(limitrate_process>limitrate) break;
+	 }
+
+
 	 char *req_repl=req;
 	/*ext:inject here*/
 	 if(is_inject==1){
@@ -590,7 +615,6 @@ void benchcore(const char *host,const int port,char *req)
     if(close(s)) {failed++;continue;}
     speed++;
 
-    free(req_repl);
 
  }
 }
