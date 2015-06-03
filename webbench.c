@@ -24,6 +24,7 @@
 #include <time.h>
 #include <signal.h>
 #include <stdlib.h>
+#include <sys/time.h>
 
 /* values */
 volatile int timerexpired=0;
@@ -72,7 +73,7 @@ const char address_delimeters[]=".";
 const char address_part_delimeters[]="~";
 /*rate limit, unit:number/client/s */
 int is_limitrate=0;
-int limitrate;
+long limitrate;
 
 static const struct option long_options[]=
 {
@@ -238,7 +239,7 @@ int main(int argc, char *argv[])
    case 'l':
 	   	   is_limitrate=1;
 	   	   limitrate=atoi(optarg);
-   	   	   limitrate = limitrate * benchtime;
+	   	   limitrate=limitrate*benchtime;
    	   	   break;
 
   }
@@ -251,7 +252,7 @@ int main(int argc, char *argv[])
                     }
 
  if(clients==0) clients=1;
- if(benchtime==0) benchtime=60;
+ if(benchtime==0) benchtime=30;
  /* Copyright */
  fprintf(stderr,"Webbench - Simple Web Benchmark "PROGRAM_VERSION"\n"
 	 "Copyright (c) Radim Kolar 1997-2004, GPL Open Source Software.\n"
@@ -537,7 +538,10 @@ void benchcore(const char *host,const int port,char *req)
  struct sigaction sa;
 
  /*ext:limitrate*/
- int limitrate_process=0;
+ long limitrate_process=0;
+ struct timeval tv_start;
+ struct timezone tz_start;
+ gettimeofday(&tv_start,&tz_start);
 
  /* setup alarm signal handler */
  sa.sa_handler=alarm_handler;
@@ -550,8 +554,20 @@ void benchcore(const char *host,const int port,char *req)
  {
 	 /*ext:limitrate*/
 	 if(is_limitrate==1){
-		 limitrate_process++;//not care success or fail
-		 if(limitrate_process>limitrate) break;
+		 struct timeval tv_now;
+		 struct timezone tz_now;
+		 gettimeofday(&tv_now,&tz_now);
+		 long sec_diff = tv_now.tv_sec-tv_start.tv_sec;
+		 long limitrate_process_step=(limitrate/benchtime)*(sec_diff+1);
+		 //printf("sec_diff: %ld,step:%ld\n", sec_diff,limitrate_process_step);
+		 if(limitrate_process>=limitrate){
+			 break;
+		 }
+		 if(limitrate_process>=limitrate_process_step){
+			 usleep(1000);//1ms
+			 continue;
+		 }
+		 limitrate_process++;
 	 }
 
 
